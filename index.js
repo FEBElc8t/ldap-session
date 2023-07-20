@@ -1,3 +1,4 @@
+console.clear()
 require('dotenv').config()
 const express     = require('express'),
     passport      = require('passport'),
@@ -14,11 +15,10 @@ const {
   MIDDLEWARE_SECRET
 } = process.env
 
-app.use((req, res, next) => {
-  console.log(store)
-  console.log(`${req.method} - ${req.url}`)
-  next()
-})
+// app.use((req, res, next) => {
+//   console.log(`${req.method} - ${req.url}`)
+//   next()
+// })
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
@@ -27,9 +27,13 @@ app.use(passport.initialize());
 // ref: https://www.npmjs.com/package/express-session
 app.use(session({
   secret: MIDDLEWARE_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: true },
+  resave: true,
+  saveUninitialized: true,
+  cookie: { 
+    // secure: true,
+    maxAge: (31 * 86400000) // 31 days
+  },
+  sameSite: false,
   store
 }));
 
@@ -38,12 +42,17 @@ passport.serializeUser(function(user, done) {
 });
 
 passport.deserializeUser(function(user, done) {
-  done(null, user);
+  console.log(user)
+  user.findById(id, function(err, user) {
+    console.log('no im not serial');
+    done(err, user);
+  });
+  // done(null, user);
 });
 
 passport.use(new LocalStrategy(
     function(username, password, done) {
-        // CREADENTIALS SHOULD BE ENCRYPTED! 
+        // CREDENTIALS SHOULD BE ENCRYPTED! 
         // Check -> https://www.npmjs.com/package/bcrypt
         // bcrypt.compare(password, user.password, function(err, res) {
         //   if (res) {
@@ -55,7 +64,6 @@ passport.use(new LocalStrategy(
         //   }
         // });
       loginUser(username, password).then(() => {
-
         // const sessionToken = uuid.v4()
         // // set the expiry time as 120s after the current time
         // const now = new Date()
@@ -70,10 +78,6 @@ passport.use(new LocalStrategy(
         // // and the value as the UUID we generated. We also set the expiry time
         // res.cookie("session_token", sessionToken, { expires: expiresAt })
         // res.end()
-        req.session.authenticated = true
-        req.session.user = {
-          username
-        }
 
         return done(null, {username})
       }).catch((err) => {
@@ -83,22 +87,58 @@ passport.use(new LocalStrategy(
     }
   ));
 
-  app.use(
-    '/',
-    cors({
-      origin: 'http://localhost:8080', // todo manage this via config file
-      optionsSuccessStatus: 200 
-    }))
+app.use(
+  '/',
+  cors({
+    origin: 'http://localhost:8080', // todo manage this via config file
+    optionsSuccessStatus: 200 
+  }))
 
-app.post('/auth', passport.authenticate(
-    'local', 
-    {
-        session: true,
+app.post('/login', function(req, res, next) {
+
+  passport.authenticate('local', function(err, user, info) {
+
+    if (err) {
+        return next(err);
     }
-    ), function(req, res) {
-      console.log(req.session)// -> session object
-      // console.log(res)
-  res.send({status: 'ok'});
+
+    if (!user) {
+        return res.status(401).json({
+            err: info
+        });
+    }
+
+    req.logIn(user, function(err) {
+
+        if (err) {
+            return res.status(500).json({
+                err: 'Could not log in user'
+            });
+        }
+req.session.authenticated   = true
+        res.status(200).json({
+            status: 'Login successful!',
+            user
+        });
+
+    });
+  })(req, res, next);
+});
+
+const isAuthenticated = function(req, res, next){
+  if(req.session && req.session.cookie && req.session.cookie._expires > new Date())
+     return next();
+  else
+     return res.status(401).json({
+       error: 'User not authenticated'
+     })
+
+}
+
+app.get('/check', isAuthenticated, function(req, res){
+  res.status(200).json({
+      status: 'Login successful!'
+  });
 });
 
 app.listen(PORT, () => {
