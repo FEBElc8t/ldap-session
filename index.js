@@ -30,7 +30,7 @@ app.use(session({
   resave: true,
   saveUninitialized: true,
   cookie: { 
-    // secure: true,
+    // secure: true, https requests only
     maxAge: (31 * 86400000) // 31 days
   },
   sameSite: false,
@@ -52,34 +52,8 @@ passport.deserializeUser(function(user, done) {
 
 passport.use(new LocalStrategy(
     function(username, password, done) {
-        // CREDENTIALS SHOULD BE ENCRYPTED! 
-        // Check -> https://www.npmjs.com/package/bcrypt
-        // bcrypt.compare(password, user.password, function(err, res) {
-        //   if (res) {
-        //     // passwords match! log user in
-        //     return done(null, user)
-        //   } else {
-        //     // passwords do not match!
-        //     return done(null, false)
-        //   }
-        // });
-      loginUser(username, password).then(() => {
-        // const sessionToken = uuid.v4()
-        // // set the expiry time as 120s after the current time
-        // const now = new Date()
-        // const expiresAt = new Date(+now + 120 * 1000)
-
-        // // create a session containing information about the user and expiry time
-        // const session = new Session(username, expiresAt)
-        // // add the session information to the sessions map
-        // sessions[sessionToken] = session
-
-        // // In the response, set a cookie on the client with the name "session_cookie"
-        // // and the value as the UUID we generated. We also set the expiry time
-        // res.cookie("session_token", sessionToken, { expires: expiresAt })
-        // res.end()
-
-        return done(null, {username})
+      loginUser(username, password).then((fullname) => {
+        return done(null, {username, fullname})
       }).catch((err) => {
         console.log(err)
         return done(null, false)
@@ -115,7 +89,8 @@ app.post('/login', function(req, res, next) {
                 err: 'Could not log in user'
             });
         }
-req.session.authenticated   = true
+        req.session.authenticated   = true
+        // console.log(user)
         res.status(200).json({
             status: 'Login successful!',
             user
@@ -126,6 +101,7 @@ req.session.authenticated   = true
 });
 
 const isAuthenticated = function(req, res, next){
+  // console.log(req.session.cookie._expires > new Date())
   if(req.session && req.session.cookie && req.session.cookie._expires > new Date())
      return next();
   else
